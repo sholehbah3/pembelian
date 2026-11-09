@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Pesan Makanan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Animasi sederhana untuk modal keranjang */
+        #cart-modal {
+            transition: transform 0.3s ease-in-out;
+        }
+        .cart-open {
+            transform: translateX(0);
+        }
+        .cart-closed {
+            transform: translateX(100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <!-- Navbar -->
+    <nav class="bg-orange-600 text-white p-4 sticky top-0 z-40 shadow-md">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">🍔 FoodPedia</h1>
+            <button onclick="toggleCart()" class="relative bg-orange-700 hover:bg-orange-800 px-4 py-2 rounded-lg font-semibold transition">
+                🛒 Keranjang
+                <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">0</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="max-w-6xl mx-auto mt-8 px-4">
+        <div class="bg-orange-100 rounded-2xl p-8 text-center border border-orange-200 shadow-sm">
+            <h2 class="text-3xl font-extrabold text-orange-700 mb-2">Lapar? Pesan Sekarang!</h2>
+            <p class="text-gray-600">Pilih menu favoritmu dan nikmati hidangan lezat langsung di tempat atau bawa pulang.</p>
+        </div>
+    </header>
+
+    <!-- Menu Section -->
+    <main class="max-w-6xl mx-auto mt-8 px-4 mb-12">
+        <h3 class="text-xl font-bold text-gray-700 mb-6 border-b-2 border-orange-200 pb-2">Menu Pilihan Kami</h3>
+        <div id="menu-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <!-- Item menu akan dirender oleh JavaScript -->
+        </div>
+    </main>
+
+    <!-- Cart Modal (Sidebar) -->
+    <div id="cart-overlay" onclick="toggleCart()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"></div>
+    <div id="cart-modal" class="fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 cart-closed flex flex-col">
+        <div class="p-4 bg-orange-600 text-white flex justify-between items-center">
+            <h2 class="text-xl font-bold">🛒 Keranjang Belanja</h2>
+            <button onclick="toggleCart()" class="text-2xl font-bold hover:text-gray-200">×</button>
+        </div>
+        
+        <div id="cart-items" class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+            <!-- Item keranjang akan dirender di sini -->
+            <div id="empty-cart-msg" class="text-center text-gray-500 mt-10">Keranjang masih kosong</div>
+        </div>
+
+        <div class="p-4 bg-gray-100 border-t border-gray-200">
+            <div class="flex justify-between font-bold text-lg mb-4">
+                <span>Total:</span>
+                <span id="cart-total">Rp 0</span>
+            </div>
+            <button onclick="checkout()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition">
+                Proses Pembayaran
+            </button>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        Pesan berhasil ditambahkan!
+    </div>
+
+    <script>
+        // Data Produk
+        const products = [
+            { id: 1, name: "Burger Sapi Spesial", price: 35000, icon: "🍔", category: "Makanan" },
+            { id: 2, name: "Pizza Keju Leleh", price: 75000, icon: "🍕", category: "Makanan" },
+            { id: 3, name: "Ayam Goreng Krispi", price: 25000, icon: "🍗", category: "Makanan" },
+            { id: 4, name: "Kentang Goreng", price: 15000, icon: "🍟", category: "Cemilan" },
+            { id: 5, name: "Es Teh Manis", price: 8000, icon: "🧊", category: "Minuman" },
+            { id: 6, name: "Jus Jeruk Segar", price: 12000, icon: "🍊", category: "Minuman" },
+            { id: 7, name: "Kopi Susu Dingin", price: 18000, icon: "☕", category: "Minuman" },
+            { id: 8, name: "Es Krim Coklat", price: 10000, icon: "🍦", category: "Dessert" }
+        ];
+
+        let cart = [];
+
+        // Format angka ke Rupiah
+        const formatRupiah = (number) => {
+            return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(number);
+        };
+
+        // Render Menu ke layar
+        const renderMenu = () => {
+            const container = document.getElementById("menu-container");
+            container.innerHTML = "";
+
+            products.forEach(product => {
+                const card = document.createElement("div");
+                card.className = "bg-white rounded-xl shadow-md hover:shadow-lg transition overflow-hidden border border-gray-100 flex flex-col";
+                card.innerHTML = `
+                    <div class="h-32 bg-orange-50 flex items-center justify-center text-6xl">
+                        ${product.icon}
+                    </div>
+                    <div class="p-4 flex flex-col flex-grow">
+                        <span class="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-1 rounded-full w-max mb-2">${product.category}</span>
+                        <h4 class="font-bold text-lg text-gray-800">${product.name}</h4>
+                        <p class="text-gray-600 font-medium mt-1 mb-4">${formatRupiah(product.price)}</p>
+                        <button onclick="addToCart(${product.id})" class="mt-auto w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 rounded-lg transition">
+                            + Tambah
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        };
+
+        // Tambah ke Keranjang
+        const addToCart = (id) => {
+            const product = products.find(p => p.id === id);
+            const existingItem = cart.find(item => item.id === id);
+
+            if (existingItem) {
+                existingItem.qty += 1;
+            } else {
+                cart.push({ ...product, qty: 1 });
+            }
+
+            updateCartUI();
+            showToast(`1x ${product.name} masuk keranjang!`);
+        };
+
+        // Kurangi atau Hapus dari Keranjang
+        const decreaseQty = (id) => {
+            const itemIndex = cart.findIndex(item => item.id === id);
+            if (cart[itemIndex].qty > 1) {
+                cart[itemIndex].qty -= 1;
+            } else {
+                cart.splice(itemIndex, 1);
+            }
+            updateCartUI();
+        };
+
+        // Perbarui Tampilan Keranjang
+        const updateCartUI = () => {
+            const cartContainer = document.getElementById("cart-items");
+            const countBadge = document.getElementById("cart-count");
+            const totalDisplay = document.getElementById("cart-total");
+            const emptyMsg = document.getElementById("empty-cart-msg");
+
+            cartContainer.innerHTML = "";
+            let total = 0;
+            let totalItems = 0;
+
+            if (cart.length === 0) {
+                cartContainer.appendChild(emptyMsg);
+                emptyMsg.style.display = "block";
+            } else {
+                emptyMsg.style.display = "none";
+                cart.forEach(item => {
+                    const subtotal = item.price * item.qty;
+                    total += subtotal;
+                    totalItems += item.qty;
+
+                    const cartElement = document.createElement("div");
+                    cartElement.className = "flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200";
+                    cartElement.innerHTML = `
+                        <div class="flex-1">
+                            <h5 class="font-semibold text-sm">${item.name}</h5>
+                            <p class="text-orange-600 text-xs font-bold">${formatRupiah(item.price)}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="decreaseQty(${item.id})" class="bg-gray-200 hover:bg-gray-300 w-6 h-6 rounded flex items-center justify-center font-bold text-gray-700">-</button>
+                            <span class="font-bold text-sm">${item.qty}</span>
+                            <button onclick="addToCart(${item.id})" class="bg-orange-200 hover:bg-orange-300 w-6 h-6 rounded flex items-center justify-center font-bold text-orange-800">+</button>
+                        </div>
+                    `;
+                    cartContainer.appendChild(cartElement);
+                });
+            }
+
+            countBadge.innerText = totalItems;
+            totalDisplay.innerText = formatRupiah(total);
+        };
+
+        // Buka/Tutup Sidebar Keranjang
+        const toggleCart = () => {
+            const modal = document.getElementById("cart-modal");
+            const overlay = document.getElementById("cart-overlay");
+            
+            if (modal.classList.contains("cart-closed")) {
+                modal.classList.remove("cart-closed");
+                modal.classList.add("cart-open");
+                overlay.classList.remove("hidden");
+            } else {
+                modal.classList.remove("cart-open");
+                modal.classList.add("cart-closed");
+                overlay.classList.add("hidden");
+            }
+        };
+
+        // Proses Pembayaran (Simulasi)
+        const checkout = () => {
+            if (cart.length === 0) {
+                alert("Keranjang masih kosong!");
+                return;
+            }
+            alert(`Pemesanan berhasil!\nTotal pembayaran: ${document.getElementById('cart-total').innerText}\nTerima kasih telah memesan.`);
+            cart = [];
+            updateCartUI();
+            toggleCart();
+        };
+
+        // Tampilkan Notifikasi (Toast)
+        const showToast = (message) => {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.style.opacity = "1";
+            setTimeout(() => {
+                toast.style.opacity = "0";
+            }, 2000);
+        };
+
+        // Inisialisasi saat halaman dimuat
+        renderMenu();
+    </script>
+</body>
+</html>
